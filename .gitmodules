@@ -1,0 +1,9 @@
+[submodule "sky-browser"]
+	path = sky-browser
+	url = https://github.com/yunzaibo/sky-browser.git
+[submodule "sky-knife"]
+	path = sky-knife
+	url = https://github.com/yunzaibo/sky-knife.git
+[submodule "sky-minds"]
+	path = sky-minds
+	url = https://github.com/yunzaibo/sky-minds.git
