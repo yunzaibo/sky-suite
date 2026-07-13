@@ -1,0 +1,209 @@
+#!/usr/bin/env node
+/**
+ * Sky Suite 统一命令行入口
+ *
+ * 用法:
+ *   sky-suite init                    # 初始化空知识库
+ *   sky-suite collect <url>           # 采集网页
+ *   sky-suite ingest [asset-ids...]   # 富化+入图
+ *   sky-suite query "<question>"      # 检索
+ *   sky-suite demo                    # 解压示例数据集
+ *   sky-suite health                  # 健康检查
+ */
+
+const { spawn } = require('child_process');
+const { resolve, join } = require('path');
+const { existsSync } = require('fs');
+
+// 三件套路径(相对 cli/ 的父目录)
+const SUITE_ROOT = resolve(__dirname, '../..');
+const BROWSER_ROOT = join(SUITE_ROOT, 'sky-browser');
+const KNIFE_ROOT = join(SUITE_ROOT, 'sky-knife');
+const MINDS_ROOT = join(SUITE_ROOT, 'sky-minds');
+
+// Python 路径(优先用 python3.12)
+const PYTHON = process.env.PYTHON || 'python3.12';
+
+/**
+ * 执行 Python 脚本
+ */
+function runPython(scriptPath, args = [], cwd = KNIFE_ROOT) {
+  return new Promise((resolve, reject) => {
+    const proc = spawn(PYTHON, [scriptPath, ...args], {
+      cwd,
+      stdio: 'inherit',
+      env: process.env,
+    });
+    proc.on('close', code => {
+      if (code === 0) resolve();
+      else reject(new Error(`Exit code ${code}`));
+    });
+  });
+}
+
+/**
+ * 命令实现
+ */
+const commands = {
+  async init() {
+    console.log('=== 初始化 Sky Suite 知识库 ===\n');
+
+    // 检查目录
+    const dataDir = join(KNIFE_ROOT, 'data');
+    if (!existsSync(dataDir)) {
+      console.error(`❌ 知识库目录不存在: ${dataDir}`);
+      console.error('请确保在正确的 sky-suite 目录下运行');
+      process.exit(1);
+    }
+
+    console.log(`✓ 知识库根目录: ${dataDir}`);
+    console.log(`✓ canonical-assets: ${join(dataDir, 'canonical-assets')}`);
+    console.log(`✓ llm-wiki: ${join(dataDir, 'llm-wiki')}`);
+    console.log('\n知识库已就绪(空骨架)。');
+    console.log('\n下一步:');
+    console.log('  sky-suite collect <url>     # 采集网页');
+    console.log('  sky-suite demo              # 或解压示例数据集');
+  },
+
+  async collect(url) {
+    if (!url) {
+      console.error('用法: sky-suite collect <url>');
+      process.exit(1);
+    }
+
+    console.log(`=== 采集: ${url} ===\n`);
+
+    const harvestScript = join(KNIFE_ROOT, 'scripts', 'harvest_url_batch.py');
+    const outPath = join(KNIFE_ROOT, 'data', 'harvest-result.json');
+
+    await runPython(harvestScript, ['--url', url, '--out', outPath]);
+
+    console.log(`\n✓ 采集完成: ${outPath}`);
+    console.log('\n下一步:');
+    console.log('  sky-suite ingest            # 富化+入图');
+  },
+
+  async ingest(assetIds) {
+    console.log('=== 富化+入图 ===\n');
+
+    const ingestScript = join(KNIFE_ROOT, 'scripts', 'graph_ingest.py');
+    const specPath = join(KNIFE_ROOT, 'data', 'spec.json');
+
+    // TODO: 从 harvest-result.json 自动构造 spec.json
+    console.log('⚠️  ingest 功能需要手动构造 spec.json');
+    console.log(`请参考: ${join(KNIFE_ROOT, 'workflows', 'kb-harvest.md')}`);
+    console.log('\n或使用完整工作流:');
+    console.log('  cd sky-knife');
+    console.log('  python3.12 scripts/harvest_url_batch.py --url <url>');
+    console.log('  # 手动富化(见 workflows/kb-harvest.md)');
+    console.log('  python3.12 scripts/graph_ingest.py build spec.json');
+  },
+
+  async query(question) {
+    if (!question) {
+      console.error('用法: sky-suite query "<question>"');
+      process.exit(1);
+    }
+
+    console.log(`=== 检索: ${question} ===\n`);
+
+    const queryScript = join(KNIFE_ROOT, 'scripts', 'knife_to_minds_evidence.py');
+
+    await runPython(queryScript, ['--question', question]);
+  },
+
+  async demo() {
+    console.log('=== 解压示例数据集 ===\n');
+
+    const tarPath = join(KNIFE_ROOT, 'examples', 'sample-dataset.tar.gz');
+    const targetDir = join(KNIFE_ROOT, 'data', 'canonical-assets');
+
+    if (!existsSync(tarPath)) {
+      console.error(`❌ 示例数据集不存在: ${tarPath}`);
+      process.exit(1);
+    }
+
+    const { execSync } = require('child_process');
+    execSync(`tar -xzf "${tarPath}" -C "${targetDir}" --strip-components=1`, { stdio: 'inherit' });
+
+    console.log(`✓ 已解压 13 个示例到: ${targetDir}`);
+    console.log('\n下一步:');
+    console.log('  sky-suite ingest            # 入图');
+  },
+
+  async health() {
+    console.log('=== 健康检查 ===\n');
+
+    const checks = [
+      { name: 'Python 3.12', cmd: 'python3.12 --version' },
+      { name: 'Node.js', cmd: 'node --version' },
+      { name: 'agent-browser-cli', cmd: 'agent-browser-cli --version' },
+      { name: 'sky-browser', path: BROWSER_ROOT },
+      { name: 'sky-knife', path: KNIFE_ROOT },
+      { name: 'sky-minds', path: MINDS_ROOT },
+    ];
+
+    const { execSync } = require('child_process');
+
+    for (const check of checks) {
+      try {
+        if (check.cmd) {
+          const output = execSync(check.cmd, { encoding: 'utf8', stdio: 'pipe' });
+          console.log(`✓ ${check.name}: ${output.trim()}`);
+        } else if (check.path) {
+          if (existsSync(check.path)) {
+            console.log(`✓ ${check.name}: ${check.path}`);
+          } else {
+            console.log(`✗ ${check.name}: 不存在`);
+          }
+        }
+      } catch (err) {
+        console.log(`✗ ${check.name}: 未安装`);
+      }
+    }
+  },
+};
+
+/**
+ * 主入口
+ */
+async function main() {
+  const [cmd, ...args] = process.argv.slice(2);
+
+  if (!cmd || cmd === 'help' || cmd === '-h' || cmd === '--help') {
+    console.log(`
+Sky Suite 统一命令行工具
+
+用法:
+  sky-suite init                    初始化空知识库
+  sky-suite collect <url>           采集网页
+  sky-suite ingest [asset-ids...]   富化+入图
+  sky-suite query "<question>"      检索
+  sky-suite demo                    解压示例数据集(13个建筑)
+  sky-suite health                  健康检查
+
+示例:
+  sky-suite init
+  sky-suite collect https://www.archdaily.com/...
+  sky-suite demo
+  sky-suite query "材料 消隐 在地"
+`);
+    process.exit(0);
+  }
+
+  const handler = commands[cmd];
+  if (!handler) {
+    console.error(`❌ 未知命令: ${cmd}`);
+    console.error('运行 sky-suite --help 查看帮助');
+    process.exit(1);
+  }
+
+  try {
+    await handler(...args);
+  } catch (err) {
+    console.error(`\n❌ 命令失败: ${err.message}`);
+    process.exit(1);
+  }
+}
+
+main();

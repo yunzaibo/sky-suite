@@ -1,0 +1,38 @@
+{
+  "name": "@sky-suite/cli",
+  "version": "0.1.0",
+  "description": "Sky Suite 统一命令行工具 - 采集→入库→检索→判断",
+  "main": "bin/sky-suite",
+  "bin": {
+    "sky-suite": "./bin/sky-suite"
+  },
+  "scripts": {
+    "test": "node bin/sky-suite health"
+  },
+  "keywords": [
+    "knowledge-base",
+    "web-scraping",
+    "graph",
+    "ai",
+    "reasoning"
+  ],
+  "author": "yunzaibo",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yunzaibo/sky-suite.git",
+    "directory": "cli"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "os": [
+    "darwin",
+    "linux"
+  ],
+  "dependencies": {},
+  "peerDependencies": {
+    "agent-browser-cli": ">=1.0.0"
+  },
+  "devDependencies": {}
+}
