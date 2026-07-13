@@ -1,5 +1,5 @@
 {
-  "name": "@sky-suite/cli",
+  "name": "sky-suite",
   "version": "0.1.0",
   "description": "Sky Suite 统一命令行工具 - 采集→入库→检索→判断",
   "main": "bin/sky-suite",

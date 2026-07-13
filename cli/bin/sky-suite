@@ -113,53 +113,80 @@ const commands = {
   },
 
   async demo() {
-    console.log('=== 解压示例数据集 ===\n');
+    console.log('=== 解压示例数据集(含预建图谱) ===\n');
 
     const tarPath = join(KNIFE_ROOT, 'examples', 'sample-dataset.tar.gz');
-    const targetDir = join(KNIFE_ROOT, 'data', 'canonical-assets');
+    const dataDir = join(KNIFE_ROOT, 'data');
 
     if (!existsSync(tarPath)) {
       console.error(`❌ 示例数据集不存在: ${tarPath}`);
       process.exit(1);
     }
 
+    // 示例包镜像 data/ 布局:canonical-assets/ + llm-wiki/graphify-out/graph.json
+    // 一并落地 → 资产 + 图谱就位,query 开箱即用
     const { execSync } = require('child_process');
-    execSync(`tar -xzf "${tarPath}" -C "${targetDir}" --strip-components=1`, { stdio: 'inherit' });
+    execSync(`tar -xzf "${tarPath}" -C "${dataDir}"`, { stdio: 'inherit' });
 
-    console.log(`✓ 已解压 13 个示例到: ${targetDir}`);
-    console.log('\n下一步:');
-    console.log('  sky-suite ingest            # 入图');
+    console.log(`✓ 已解压 13 个示例 + 预建图谱到: ${dataDir}`);
+    console.log('\n下一步(开箱即用,无需先 ingest):');
+    console.log('  sky-suite query "材料 消隐 在地"');
   },
 
   async health() {
     console.log('=== 健康检查 ===\n');
 
-    const checks = [
+    const { execSync } = require('child_process');
+
+    // 版本类:能取版本号的
+    const versioned = [
       { name: 'Python 3.12', cmd: 'python3.12 --version' },
       { name: 'Node.js', cmd: 'node --version' },
-      { name: 'agent-browser-cli', cmd: 'agent-browser-cli --version' },
+      { name: 'uv', cmd: 'uv --version' },
+    ];
+    // 存在类:只判断命令在不在(某些工具无 --version)
+    const present = [
+      { name: 'agent-browser-cli (采集需要)', bin: 'agent-browser-cli' },
+    ];
+    // 路径类:三件套模块
+    const paths = [
       { name: 'sky-browser', path: BROWSER_ROOT },
       { name: 'sky-knife', path: KNIFE_ROOT },
       { name: 'sky-minds', path: MINDS_ROOT },
     ];
 
-    const { execSync } = require('child_process');
-
-    for (const check of checks) {
+    for (const c of versioned) {
       try {
-        if (check.cmd) {
-          const output = execSync(check.cmd, { encoding: 'utf8', stdio: 'pipe' });
-          console.log(`✓ ${check.name}: ${output.trim()}`);
-        } else if (check.path) {
-          if (existsSync(check.path)) {
-            console.log(`✓ ${check.name}: ${check.path}`);
-          } else {
-            console.log(`✗ ${check.name}: 不存在`);
-          }
-        }
-      } catch (err) {
-        console.log(`✗ ${check.name}: 未安装`);
+        const out = execSync(c.cmd, { encoding: 'utf8', stdio: 'pipe' });
+        console.log(`✓ ${c.name}: ${out.trim()}`);
+      } catch {
+        console.log(`✗ ${c.name}: 未安装`);
       }
+    }
+    for (const c of present) {
+      try {
+        execSync(`command -v ${c.bin}`, { encoding: 'utf8', stdio: 'pipe', shell: '/bin/bash' });
+        console.log(`✓ ${c.name}: 已安装`);
+      } catch {
+        console.log(`✗ ${c.name}: 未安装`);
+      }
+    }
+    for (const c of paths) {
+      console.log(existsSync(c.path) ? `✓ ${c.name}: ${c.path}` : `✗ ${c.name}: 不存在`);
+    }
+    // graphify:经 uv 临时运行,不需全局装
+    try {
+      execSync('command -v graphify', { stdio: 'pipe', shell: '/bin/bash' });
+      console.log('✓ graphify (检索需要): 已全局安装');
+    } catch {
+      console.log('○ graphify (检索需要): 未全局安装 — 脚本经 `uv run --with graphifyy` 临时运行,无妨');
+    }
+
+    // sky-knife venv 提示
+    if (!existsSync(join(KNIFE_ROOT, '.venv'))) {
+      console.log('\n⚠️  sky-knife/.venv 未建。首次使用请先:');
+      console.log('   cd sky-knife && uv venv .venv --python 3.12 && \\');
+      console.log('   uv pip install --python .venv/bin/python requests readability-lxml lxml beautifulsoup4 Pillow yt-dlp pytest');
     }
   },
 };
